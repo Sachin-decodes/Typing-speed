@@ -1,131 +1,362 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const path = require('path');
-
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
-
-// Serve static files from current directory
-app.use(express.static(__dirname));
-
-// Game State
-const rooms = new Map();
-
-const WORDS = [
-    "apple", "keyboard", "javascript", "window", "screen",
-    "coding", "browser", "speed", "project", "college",
-    "computer", "mouse", "internet", "learning", "typing",
-    "developer", "syntax", "variable", "function", "design",
-    "algorithm", "database", "network", "server", "client"
-];
-
-function generateRoomCode() {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
+/* ==== GLOBAL ==== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
-function generateWords() {
-    const gameWords = [];
-    for (let i = 0; i < 25; i++) {
-        gameWords.push(WORDS[Math.floor(Math.random() * WORDS.length)]);
+body {
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(135deg, #111827, #1f2937);
+    color: white;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 40px 20px;
+}
+
+.main-container {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ==== HEADER ==== */
+header h1 {
+    text-align: center;
+    font-size: 2.5rem;
+    background: linear-gradient(to right, #4ade80, #3b82f6);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 10px;
+}
+
+/* ==== LAYOUT GRIDS ==== */
+.dashboard {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 20px;
+}
+
+.card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 20px;
+    backdrop-filter: blur(10px);
+}
+
+/* ==== LEFT CARD: TIMER & STATS ==== */
+.stats-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    text-align: center;
+}
+
+#timerContainer {
+    position: relative;
+    width: 120px;
+    height: 120px;
+}
+
+.progress-ring {
+    transform: rotate(-90deg);
+}
+
+#ring {
+    stroke-dasharray: 326;
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset 1s linear;
+}
+
+#timeLeft {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.5rem;
+    font-weight: bold;
+    font-family: 'Roboto Mono', monospace;
+}
+
+.mini-stats {
+    display: flex;
+    gap: 20px;
+    width: 100%;
+    justify-content: space-around;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 15px;
+}
+
+.stat {
+    display: flex;
+    flex-direction: column;
+}
+
+.label {
+    font-size: 0.8rem;
+    opacity: 0.6;
+}
+
+#wpmDisplay,
+#accuracyDisplay {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #4ade80;
+}
+
+/* ==== RIGHT CARD: TYPING ==== */
+.typing-card {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+#textDisplay {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 1.2rem;
+    line-height: 1.6;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 15px;
+    border-radius: 10px;
+    height: 150px;
+    overflow-y: auto;
+    color: #d1d5db;
+}
+
+#inputBox {
+    width: 100%;
+    height: 60px;
+    padding: 15px;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 1.1rem;
+    border-radius: 10px;
+    border: none;
+    outline: none;
+    background: #f3f4f6;
+    color: #111827;
+}
+
+#inputBox:focus {
+    box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.5);
+}
+
+/* ==== SETTINGS BAR ==== */
+.settings-bar {
+    display: flex;
+    justify-content: space-between;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 15px;
+    border-radius: 12px;
+    align-items: center;
+}
+
+select {
+    padding: 10px 20px;
+    background: #374151;
+    color: white;
+    border: 1px solid #4b5563;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+button {
+    padding: 10px 25px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+button:hover {
+    background: #2563eb;
+    transform: translateY(-2px);
+}
+
+/* ==== RESULTS TABLE ==== */
+.results-card h3 {
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 15px;
+}
+
+th,
+td {
+    padding: 12px;
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+th {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+#clearHistoryBtn {
+    width: 100%;
+    background: #ef4444;
+}
+
+#clearHistoryBtn:hover {
+    background: #dc2626;
+}
+
+/* Correct/Incorrect highlighting */
+.correct {
+    color: #4ade80;
+}
+
+.incorrect {
+    color: #f87171;
+    text-decoration: underline;
+}
+
+/* Responsive: Stack on mobile */
+@media (max-width: 768px) {
+    .dashboard {
+        grid-template-columns: 1fr;
     }
-    return gameWords.join(" ");
 }
 
-io.on('connection', (socket) => {
-    console.log('A user connected:', socket.id);
+/* ==== MULTIPLAYER ==== */
+.multiplayer-card {
+    text-align: center;
+    margin-bottom: 20px;
+}
 
-    socket.on('createRoom', () => {
-        const roomCode = generateRoomCode();
-        rooms.set(roomCode, {
-            players: [socket.id],
-            gameState: 'waiting',
-            words: generateWords(),
-            results: {} // Store results here: { socketId: { wpm, accuracy, time } }
-        });
-        socket.join(roomCode);
-        socket.emit('roomCreated', roomCode);
-        console.log(`Room created: ${roomCode} by ${socket.id}`);
-    });
+.multiplayer-card h3 {
+    margin-bottom: 15px;
+    color: #4ade80;
+}
 
-    socket.on('joinRoom', (roomCode) => {
-        const room = rooms.get(roomCode);
-        if (room && room.players.length < 2 && room.gameState === 'waiting') {
-            room.players.push(socket.id);
-            socket.join(roomCode);
+#lobbyControls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
 
-            // Notify both players that game can start
-            io.to(roomCode).emit('gameStart', {
-                words: room.words,
-                players: room.players
-            });
+.join-container {
+    display: flex;
+    gap: 10px;
+}
 
-            room.gameState = 'playing';
-            console.log(`User ${socket.id} joined room ${roomCode}`);
-        } else {
-            socket.emit('error', 'Room not found or full');
-        }
-    });
+#roomCodeInput {
+    padding: 10px;
+    border-radius: 8px;
+    border: none;
+    background: #374151;
+    color: white;
+    font-family: 'Roboto Mono', monospace;
+    text-transform: uppercase;
+}
 
-    socket.on('updateProgress', ({ roomCode, wpm, progress }) => {
-        // Broadcast to other player in the room
-        socket.to(roomCode).emit('opponentProgress', {
-            wpm,
-            progress
-        });
-    });
+.code-display {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #facc15;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 5px 10px;
+    border-radius: 5px;
+    margin: 0 10px;
+}
 
-    socket.on('gameFinished', ({ roomCode, wpm, accuracy, time }) => {
-        const room = rooms.get(roomCode);
-        if (!room) return;
+#roomStatus p {
+    margin: 10px 0;
+    font-size: 1.1rem;
+}
 
-        // Store result
-        room.results[socket.id] = { wpm, accuracy, time };
+/* Utility */
+.hidden {
+    display: none !important;
+}
 
-        // Notify opponent that this player finished
-        socket.to(roomCode).emit('opponentFinished', { wpm, time });
+/* Opponent Stats Card */
+#opponentStats {
+    border-color: #facc15;
+}
 
-        // Check if both players finished
-        if (Object.keys(room.results).length === 2) {
-            const playerIds = room.players;
-            const p1 = room.results[playerIds[0]];
-            const p2 = room.results[playerIds[1]];
+#opponentStats h3 {
+    color: #facc15;
+    margin-bottom: 10px;
+    text-align: center;
+}
 
-            // Simple winner logic: Higher WPM wins. Tie-break: Accuracy.
-            let winnerId = null;
-            if (p1.wpm > p2.wpm) winnerId = playerIds[0];
-            else if (p2.wpm > p1.wpm) winnerId = playerIds[1];
-            else {
-                // WPM tie, check accuracy
-                if (parseFloat(p1.accuracy) > parseFloat(p2.accuracy)) winnerId = playerIds[0];
-                else if (parseFloat(p2.accuracy) > parseFloat(p1.accuracy)) winnerId = playerIds[1];
-                else winnerId = 'draw';
-            }
+/* ==== MODAL ==== */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
 
-            io.to(roomCode).emit('gameOver', {
-                results: room.results,
-                winnerId: winnerId
-            });
+.modal-content {
+    background: #1f2937;
+    padding: 30px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: center;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
 
-            // Cleanup room after delay or keep it for rematch? 
-            // For now, let's just leave it.
-        }
-    });
+.winner-text {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 20px;
+    color: #facc15;
+}
 
-    socket.on('disconnect', () => {
-        console.log('User disconnected:', socket.id);
-        // Cleanup rooms where this user was present
-        rooms.forEach((room, code) => {
-            if (room.players.includes(socket.id)) {
-                io.to(code).emit('playerDisconnected');
-                rooms.delete(code);
-            }
-        });
-    });
-});
+.comparison-container {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    margin-bottom: 25px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 20px;
+    border-radius: 12px;
+}
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-});
+.player-result {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.big-stat {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #4ade80;
+}
+
+.sub-stat {
+    font-size: 0.9rem;
+    opacity: 0.7;
+}
+
+.vs-divider {
+    font-weight: bold;
+    opacity: 0.5;
+    font-size: 1.2rem;
+}
