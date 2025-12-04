@@ -11,7 +11,7 @@ const wordBank = [
 // DOM Elements
 const textDisplay = document.getElementById("textDisplay");
 const inputBox = document.getElementById("inputBox");
-const startBtn = document.getElementById("restartBtn"); // Acts as Start & Restart
+const startBtn = document.getElementById("restartBtn");
 const diffSelect = document.getElementById("diffSelect");
 
 // Stats Elements
@@ -52,11 +52,8 @@ let currentRoomCode = null;
 /* =========================================
    INITIALIZATION
    ========================================= */
-// Setup Ring SVG Dash properties
 ring.style.strokeDasharray = `${circumference} ${circumference}`;
 ring.style.strokeDashoffset = 0;
-
-// Load history on startup
 displayHistory();
 
 /* =========================================
@@ -82,10 +79,7 @@ socket.on("roomCreated", (code) => {
 });
 
 socket.on("gameStart", (data) => {
-    // data = { words: "...", players: [...] }
     statusMessage.innerText = "Opponent joined! Game starting...";
-
-    // Reset UI for game
     setTimeout(() => {
         startMultiplayerGame(data.words);
     }, 1000);
@@ -98,7 +92,21 @@ socket.on("opponentProgress", (data) => {
 
 socket.on("opponentFinished", (data) => {
     statusMessage.innerText = `Opponent finished! WPM: ${data.wpm}`;
-    // You could show a "You Lost" or "You Won" message here if you check your own state
+});
+
+socket.on("gameOver", (data) => {
+    const mySocketId = socket.id;
+    const myResult = data.results[mySocketId];
+
+    let oppResult;
+    for (let id in data.results) {
+        if (id !== mySocketId) {
+            oppResult = data.results[id];
+            break;
+        }
+    }
+
+    showGameOverModal(myResult, oppResult, data.winnerId === mySocketId);
 });
 
 socket.on("playerDisconnected", () => {
@@ -115,8 +123,6 @@ function enterLobbyState(code) {
     roomStatus.classList.remove("hidden");
     roomCodeDisplay.innerText = code;
     opponentStats.classList.remove("hidden");
-
-    // Disable single player controls
     diffSelect.disabled = true;
     startBtn.disabled = true;
 }
@@ -132,12 +138,38 @@ function resetToSinglePlayer() {
     statusMessage.innerText = "Waiting for opponent...";
 }
 
+function showGameOverModal(myResult, oppResult, iWon) {
+    const modal = document.getElementById("gameOverModal");
+    const winnerText = document.getElementById("winnerText");
+    const myFinalWpm = document.getElementById("myFinalWpm");
+    const myFinalAcc = document.getElementById("myFinalAcc");
+    const oppFinalWpm = document.getElementById("oppFinalWpm");
+    const oppFinalAcc = document.getElementById("oppFinalAcc");
+
+    myFinalWpm.innerText = myResult.wpm;
+    myFinalAcc.innerText = myResult.accuracy + " Acc";
+    oppFinalWpm.innerText = oppResult.wpm;
+    oppFinalAcc.innerText = oppResult.accuracy + " Acc";
+
+    if (iWon) {
+        winnerText.innerText = "🏆 You Won!";
+        winnerText.style.color = "#4ade80";
+    } else if (myResult.wpm === oppResult.wpm && myResult.accuracy === oppResult.accuracy) {
+        winnerText.innerText = "🤝 It's a Draw!";
+        winnerText.style.color = "#facc15";
+    } else {
+        winnerText.innerText = "😔 You Lost!";
+        winnerText.style.color = "#f87171";
+    }
+
+    modal.classList.remove("hidden");
+}
+
 /* =========================================
    GAME LOGIC
    ========================================= */
 
 function startMultiplayerGame(words) {
-    // Reset Game State
     clearInterval(timerInterval);
     mistakes = 0;
     inputBox.value = "";
@@ -145,33 +177,27 @@ function startMultiplayerGame(words) {
     inputBox.focus();
     isGameActive = true;
 
-    // Set Words
     currentText = words;
     textDisplay.innerHTML = currentText.split('').map(char => `<span>${char}</span>`).join('');
 
-    // Reset Stats
     wpmDisplay.innerText = "0";
     accuracyDisplay.innerText = "100%";
-    timeLeft = 60; // Fixed time for multiplayer for now
+    timeLeft = 60;
     totalTime = 60;
     updateTimerDisplay();
 
-    // Start Timer
     timerInterval = setInterval(() => {
         timeLeft--;
         updateTimerDisplay();
-
         if (timeLeft <= 0) {
             finishGame();
         }
     }, 1000);
 }
 
-// Main Function to Start/Restart Game (Single Player)
 function startGame() {
-    if (isMultiplayer) return; // Don't allow manual start in MP
+    if (isMultiplayer) return;
 
-    // 1. Reset Game State
     clearInterval(timerInterval);
     mistakes = 0;
     inputBox.value = "";
@@ -179,10 +205,8 @@ function startGame() {
     inputBox.focus();
     isGameActive = true;
 
-    // 2. Update Button Text
     startBtn.innerText = "↻ Restart Game";
 
-    // 3. Set Difficulty Time
     const difficulty = diffSelect.value;
     if (difficulty === "easy") totalTime = 60;
     else if (difficulty === "medium") totalTime = 40;
@@ -190,51 +214,43 @@ function startGame() {
 
     timeLeft = totalTime;
 
-    // 4. Update UI
     wpmDisplay.innerText = "0";
     accuracyDisplay.innerText = "100%";
     generateText();
     updateTimerDisplay();
 
-    // 5. Start Countdown
     timerInterval = setInterval(() => {
         timeLeft--;
         updateTimerDisplay();
-
         if (timeLeft <= 0) {
             finishGame();
         }
     }, 1000);
 }
 
-// Generate Random Words (Single Player)
 function generateText() {
     let randomWords = [];
-    for (let i = 0; i < 25; i++) { // Generate 25 words
+    for (let i = 0; i < 25; i++) {
         randomWords.push(wordBank[Math.floor(Math.random() * wordBank.length)]);
     }
     currentText = randomWords.join(" ");
     textDisplay.innerHTML = currentText.split('').map(char => `<span>${char}</span>`).join('');
 }
 
-// Update Timer & Ring Animation
 function updateTimerDisplay() {
     timeLeftDisplay.innerText = `${timeLeft}s`;
-
-    // Calculate SVG Offset
     const offset = circumference - (timeLeft / totalTime) * circumference;
     ring.style.strokeDashoffset = offset;
 }
 
-// Typing Event Listener
 inputBox.addEventListener("input", () => {
-    if (!isGameActive && !isMultiplayer) startGame(); // Auto-start only in single player
+    if (!isGameActive && !isMultiplayer) startGame();
 
     const charArray = textDisplay.querySelectorAll('span');
     const typedValue = inputBox.value.split('');
 
     let correctChars = 0;
-    mistakes = 0; // Reset and recount mistakes based on current input
+    mistakes = 0;
 
     charArray.forEach((charSpan, index) => {
         const char = typedValue[index];
@@ -253,18 +269,15 @@ inputBox.addEventListener("input", () => {
         }
     });
 
-    // Real-time Stats
     let accuracy = typedValue.length > 0
         ? Math.round(((typedValue.length - mistakes) / typedValue.length) * 100)
         : 100;
     accuracyDisplay.innerText = `${accuracy}%`;
 
-    // Calculate WPM for multiplayer updates
     const timeElapsed = totalTime - timeLeft;
     const timeInMinutes = (timeElapsed === 0 ? 1 : timeElapsed) / 60;
     const currentWpm = Math.round((typedValue.length / 5) / timeInMinutes) || 0;
 
-    // Multiplayer Update
     if (isMultiplayer && isGameActive) {
         let progress = Math.round((typedValue.length / currentText.length) * 100);
         socket.emit("updateProgress", {
@@ -274,35 +287,31 @@ inputBox.addEventListener("input", () => {
         });
     }
 
-    // Check if finished typing everything
     if (typedValue.length === currentText.length) {
         finishGame();
     }
 });
 
-// End Game Logic
 function finishGame() {
     clearInterval(timerInterval);
     isGameActive = false;
     inputBox.disabled = true;
 
-    // Calculate Final WPM
     const charactersTyped = inputBox.value.length;
     const timeSpent = totalTime - timeLeft;
-    const timeInMinutes = (timeSpent === 0 ? 1 : timeSpent) / 60; // Avoid divide by zero
+    const timeInMinutes = (timeSpent === 0 ? 1 : timeSpent) / 60;
 
     const wpm = Math.round((charactersTyped / 5) / timeInMinutes);
-    const accuracy = accuracyDisplay.innerText; // Grab final accuracy
+    const accuracy = accuracyDisplay.innerText;
 
-    // Save to History (Local)
     saveScore({ wpm, accuracy, time: `${totalTime}s`, date: new Date().toLocaleTimeString() });
-
     displayHistory();
 
     if (isMultiplayer) {
         socket.emit("gameFinished", {
             roomCode: currentRoomCode,
             wpm: wpm,
+            accuracy: accuracy,
             time: timeSpent
         });
         statusMessage.innerText = `You finished! WPM: ${wpm}. Waiting for opponent...`;
@@ -315,8 +324,8 @@ function finishGame() {
 
 function saveScore(score) {
     let history = JSON.parse(localStorage.getItem("typingHistory")) || [];
-    history.unshift(score); // Add to beginning of array
-    if (history.length > 5) history.pop(); // Keep only last 5
+    history.unshift(score);
+    if (history.length > 5) history.pop();
     localStorage.setItem("typingHistory", JSON.stringify(history));
 }
 
@@ -335,7 +344,6 @@ function displayHistory() {
     });
 }
 
-// Clear History Button
 clearHistoryBtn.addEventListener("click", () => {
     localStorage.removeItem("typingHistory");
     displayHistory();
