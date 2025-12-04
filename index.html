@@ -108,6 +108,32 @@
 
     </div>
 
+    <!-- Game Over Modal -->
+    <div id="gameOverModal" class="modal hidden">
+        <div class="modal-content">
+            <h2 id="modalTitle">Game Over</h2>
+            <p id="winnerText" class="winner-text"></p>
+
+            <div class="comparison-container">
+                <div class="player-result">
+                    <h4>You</h4>
+                    <p class="big-stat" id="myFinalWpm">0</p>
+                    <p class="label">WPM</p>
+                    <p class="sub-stat" id="myFinalAcc">0% Acc</p>
+                </div>
+                <div class="vs-divider">VS</div>
+                <div class="player-result">
+                    <h4>Opponent</h4>
+                    <p class="big-stat" id="oppFinalWpm">0</p>
+                    <p class="label">WPM</p>
+                    <p class="sub-stat" id="oppFinalAcc">0% Acc</p>
+                </div>
+            </div>
+
+            <button id="closeModalBtn" onclick="location.reload()">Play Again</button>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
 </body>
