@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speed Typer</title>
+    <link rel="stylesheet" href="style.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&family=Roboto+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+
+    <div class="main-container">
+
+        <header>
+            <h1>⚡ Speed Typer</h1>
+        </header>
+
+        <div id="multiplayerSection" class="card multiplayer-card">
+            <h3>👥 Multiplayer</h3>
+            <div id="lobbyControls">
+                <button id="createRoomBtn">Create Room</button>
+                <div class="join-container">
+                    <input type="text" id="roomCodeInput" placeholder="Enter Room Code">
+                    <button id="joinRoomBtn">Join</button>
+                </div>
+            </div>
+            <div id="roomStatus" class="hidden">
+                <p>Room Code: <span id="roomCodeDisplay" class="code-display"></span></p>
+                <p id="statusMessage">Waiting for opponent...</p>
+            </div>
+        </div>
+
+        <div class="dashboard">
+
+            <div class="card stats-card">
+                <h3>Time Remaining</h3>
+
+                <div id="timerContainer">
+                    <svg class="progress-ring" width="120" height="120">
+                        <circle id="ringBg" stroke="rgba(255,255,255,0.1)" stroke-width="8" fill="transparent" r="52"
+                            cx="60" cy="60" />
+                        <circle id="ring" stroke="#4ade80" stroke-width="8" fill="transparent" r="52" cx="60" cy="60" />
+                    </svg>
+                    <div id="timeLeft">60s</div>
+                </div>
+
+                <div class="mini-stats">
+                    <div class="stat">
+                        <span class="label">WPM</span>
+                        <span id="wpmDisplay">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">Accuracy</span>
+                        <span id="accuracyDisplay">100%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card typing-card">
+                <div id="textDisplay">Click Start to begin...</div>
+                <textarea id="inputBox" placeholder="Type here..." spellcheck="false"></textarea>
+            </div>
+
+            <div id="opponentStats" class="card stats-card hidden">
+                <h3>Opponent</h3>
+                <div class="mini-stats">
+                    <div class="stat">
+                        <span class="label">WPM</span>
+                        <span id="oppWpmDisplay">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">Progress</span>
+                        <span id="oppProgressDisplay">0%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-bar">
+            <select id="diffSelect">
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+            </select>
+
+            <button id="restartBtn" onclick="startGame()">▶ Start Game</button>
+        </div>
+
+        <div id="results" class="card results-card">
+            <h3>Session History</h3>
+            <table id="resultsTable">
+                <thead>
+                    <tr>
+                        <th>WPM</th>
+                        <th>Accuracy</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+            <button id="clearHistoryBtn">Clear History</button>
+        </div>
+
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
