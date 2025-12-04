@@ -1,350 +1,131 @@
-/* =========================================
-   CONSTANTS & ELEMENTS
-   ========================================= */
-const wordBank = [
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+// Serve static files from current directory
+app.use(express.static(__dirname));
+
+// Game State
+const rooms = new Map();
+
+const WORDS = [
     "apple", "keyboard", "javascript", "window", "screen",
     "coding", "browser", "speed", "project", "college",
     "computer", "mouse", "internet", "learning", "typing",
-    "developer", "syntax", "variable", "function", "design"
+    "developer", "syntax", "variable", "function", "design",
+    "algorithm", "database", "network", "server", "client"
 ];
 
-// DOM Elements
-const textDisplay = document.getElementById("textDisplay");
-const inputBox = document.getElementById("inputBox");
-const startBtn = document.getElementById("restartBtn");
-const diffSelect = document.getElementById("diffSelect");
-
-// Stats Elements
-const timeLeftDisplay = document.getElementById("timeLeft");
-const wpmDisplay = document.getElementById("wpmDisplay");
-const accuracyDisplay = document.getElementById("accuracyDisplay");
-const resultsTableBody = document.querySelector("#resultsTable tbody");
-const clearHistoryBtn = document.getElementById("clearHistoryBtn");
-
-// Ring Animation Elements
-const ring = document.getElementById("ring");
-const circleRadius = ring.r.baseVal.value;
-const circumference = circleRadius * 2 * Math.PI;
-
-// Multiplayer Elements
-const socket = io();
-const createRoomBtn = document.getElementById("createRoomBtn");
-const joinRoomBtn = document.getElementById("joinRoomBtn");
-const roomCodeInput = document.getElementById("roomCodeInput");
-const roomStatus = document.getElementById("roomStatus");
-const roomCodeDisplay = document.getElementById("roomCodeDisplay");
-const statusMessage = document.getElementById("statusMessage");
-const opponentStats = document.getElementById("opponentStats");
-const oppWpmDisplay = document.getElementById("oppWpmDisplay");
-const oppProgressDisplay = document.getElementById("oppProgressDisplay");
-const lobbyControls = document.getElementById("lobbyControls");
-
-// Game Variables
-let timerInterval;
-let timeLeft;
-let totalTime = 60;
-let mistakes = 0;
-let isGameActive = false;
-let currentText = "";
-let isMultiplayer = false;
-let currentRoomCode = null;
-
-/* =========================================
-   INITIALIZATION
-   ========================================= */
-ring.style.strokeDasharray = `${circumference} ${circumference}`;
-ring.style.strokeDashoffset = 0;
-displayHistory();
-
-/* =========================================
-   MULTIPLAYER LOGIC
-   ========================================= */
-
-createRoomBtn.addEventListener("click", () => {
-    socket.emit("createRoom");
-});
-
-joinRoomBtn.addEventListener("click", () => {
-    const code = roomCodeInput.value.trim().toUpperCase();
-    if (code) {
-        socket.emit("joinRoom", code);
-    }
-});
-
-socket.on("roomCreated", (code) => {
-    currentRoomCode = code;
-    isMultiplayer = true;
-    enterLobbyState(code);
-    statusMessage.innerText = "Waiting for opponent to join...";
-});
-
-socket.on("gameStart", (data) => {
-    statusMessage.innerText = "Opponent joined! Game starting...";
-    setTimeout(() => {
-        startMultiplayerGame(data.words);
-    }, 1000);
-});
-
-socket.on("opponentProgress", (data) => {
-    oppWpmDisplay.innerText = data.wpm;
-    oppProgressDisplay.innerText = `${data.progress}%`;
-});
-
-socket.on("opponentFinished", (data) => {
-    statusMessage.innerText = `Opponent finished! WPM: ${data.wpm}`;
-});
-
-socket.on("gameOver", (data) => {
-    const mySocketId = socket.id;
-    const myResult = data.results[mySocketId];
-
-    let oppResult;
-    for (let id in data.results) {
-        if (id !== mySocketId) {
-            oppResult = data.results[id];
-            break;
-        }
-    }
-
-    showGameOverModal(myResult, oppResult, data.winnerId === mySocketId);
-});
-
-socket.on("playerDisconnected", () => {
-    alert("Opponent disconnected!");
-    resetToSinglePlayer();
-});
-
-socket.on("error", (msg) => {
-    alert(msg);
-});
-
-function enterLobbyState(code) {
-    lobbyControls.classList.add("hidden");
-    roomStatus.classList.remove("hidden");
-    roomCodeDisplay.innerText = code;
-    opponentStats.classList.remove("hidden");
-    diffSelect.disabled = true;
-    startBtn.disabled = true;
+function generateRoomCode() {
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-function resetToSinglePlayer() {
-    isMultiplayer = false;
-    currentRoomCode = null;
-    lobbyControls.classList.remove("hidden");
-    roomStatus.classList.add("hidden");
-    opponentStats.classList.add("hidden");
-    diffSelect.disabled = false;
-    startBtn.disabled = false;
-    statusMessage.innerText = "Waiting for opponent...";
-}
-
-function showGameOverModal(myResult, oppResult, iWon) {
-    const modal = document.getElementById("gameOverModal");
-    const winnerText = document.getElementById("winnerText");
-    const myFinalWpm = document.getElementById("myFinalWpm");
-    const myFinalAcc = document.getElementById("myFinalAcc");
-    const oppFinalWpm = document.getElementById("oppFinalWpm");
-    const oppFinalAcc = document.getElementById("oppFinalAcc");
-
-    myFinalWpm.innerText = myResult.wpm;
-    myFinalAcc.innerText = myResult.accuracy + " Acc";
-    oppFinalWpm.innerText = oppResult.wpm;
-    oppFinalAcc.innerText = oppResult.accuracy + " Acc";
-
-    if (iWon) {
-        winnerText.innerText = "🏆 You Won!";
-        winnerText.style.color = "#4ade80";
-    } else if (myResult.wpm === oppResult.wpm && myResult.accuracy === oppResult.accuracy) {
-        winnerText.innerText = "🤝 It's a Draw!";
-        winnerText.style.color = "#facc15";
-    } else {
-        winnerText.innerText = "😔 You Lost!";
-        winnerText.style.color = "#f87171";
-    }
-
-    modal.classList.remove("hidden");
-}
-
-/* =========================================
-   GAME LOGIC
-   ========================================= */
-
-function startMultiplayerGame(words) {
-    clearInterval(timerInterval);
-    mistakes = 0;
-    inputBox.value = "";
-    inputBox.disabled = false;
-    inputBox.focus();
-    isGameActive = true;
-
-    currentText = words;
-    textDisplay.innerHTML = currentText.split('').map(char => `<span>${char}</span>`).join('');
-
-    wpmDisplay.innerText = "0";
-    accuracyDisplay.innerText = "100%";
-    timeLeft = 60;
-    totalTime = 60;
-    updateTimerDisplay();
-
-    timerInterval = setInterval(() => {
-        timeLeft--;
-        updateTimerDisplay();
-        if (timeLeft <= 0) {
-            finishGame();
-        }
-    }, 1000);
-}
-
-function startGame() {
-    if (isMultiplayer) return;
-
-    clearInterval(timerInterval);
-    mistakes = 0;
-    inputBox.value = "";
-    inputBox.disabled = false;
-    inputBox.focus();
-    isGameActive = true;
-
-    startBtn.innerText = "↻ Restart Game";
-
-    const difficulty = diffSelect.value;
-    if (difficulty === "easy") totalTime = 60;
-    else if (difficulty === "medium") totalTime = 40;
-    else if (difficulty === "hard") totalTime = 20;
-
-    timeLeft = totalTime;
-
-    wpmDisplay.innerText = "0";
-    accuracyDisplay.innerText = "100%";
-    generateText();
-    updateTimerDisplay();
-
-    timerInterval = setInterval(() => {
-        timeLeft--;
-        updateTimerDisplay();
-        if (timeLeft <= 0) {
-            finishGame();
-        }
-    }, 1000);
-}
-
-function generateText() {
-    let randomWords = [];
+function generateWords() {
+    const gameWords = [];
     for (let i = 0; i < 25; i++) {
-        randomWords.push(wordBank[Math.floor(Math.random() * wordBank.length)]);
+        gameWords.push(WORDS[Math.floor(Math.random() * WORDS.length)]);
     }
-    currentText = randomWords.join(" ");
-    textDisplay.innerHTML = currentText.split('').map(char => `<span>${char}</span>`).join('');
+    return gameWords.join(" ");
 }
 
-function updateTimerDisplay() {
-    timeLeftDisplay.innerText = `${timeLeft}s`;
-    const offset = circumference - (timeLeft / totalTime) * circumference;
-    ring.style.strokeDashoffset = offset;
-}
+io.on('connection', (socket) => {
+    console.log('A user connected:', socket.id);
 
-inputBox.addEventListener("input", () => {
-    if (!isGameActive && !isMultiplayer) startGame();
+    socket.on('createRoom', () => {
+        const roomCode = generateRoomCode();
+        rooms.set(roomCode, {
+            players: [socket.id],
+            gameState: 'waiting',
+            words: generateWords(),
+            results: {} // Store results here: { socketId: { wpm, accuracy, time } }
+        });
+        socket.join(roomCode);
+        socket.emit('roomCreated', roomCode);
+        console.log(`Room created: ${roomCode} by ${socket.id}`);
+    });
 
-    const charArray = textDisplay.querySelectorAll('span');
-    const typedValue = inputBox.value.split('');
+    socket.on('joinRoom', (roomCode) => {
+        const room = rooms.get(roomCode);
+        if (room && room.players.length < 2 && room.gameState === 'waiting') {
+            room.players.push(socket.id);
+            socket.join(roomCode);
 
-    let correctChars = 0;
-    mistakes = 0;
+            // Notify both players that game can start
+            io.to(roomCode).emit('gameStart', {
+                words: room.words,
+                players: room.players
+            });
 
-    charArray.forEach((charSpan, index) => {
-        const char = typedValue[index];
-
-        if (char == null) {
-            charSpan.classList.remove('correct');
-            charSpan.classList.remove('incorrect');
-        } else if (char === charSpan.innerText) {
-            charSpan.classList.add('correct');
-            charSpan.classList.remove('incorrect');
-            correctChars++;
+            room.gameState = 'playing';
+            console.log(`User ${socket.id} joined room ${roomCode}`);
         } else {
-            charSpan.classList.add('incorrect');
-            charSpan.classList.remove('correct');
-            mistakes++;
+            socket.emit('error', 'Room not found or full');
         }
     });
 
-    let accuracy = typedValue.length > 0
-        ? Math.round(((typedValue.length - mistakes) / typedValue.length) * 100)
-        : 100;
-    accuracyDisplay.innerText = `${accuracy}%`;
-
-    const timeElapsed = totalTime - timeLeft;
-    const timeInMinutes = (timeElapsed === 0 ? 1 : timeElapsed) / 60;
-    const currentWpm = Math.round((typedValue.length / 5) / timeInMinutes) || 0;
-
-    if (isMultiplayer && isGameActive) {
-        let progress = Math.round((typedValue.length / currentText.length) * 100);
-        socket.emit("updateProgress", {
-            roomCode: currentRoomCode,
-            wpm: currentWpm,
-            progress: progress
+    socket.on('updateProgress', ({ roomCode, wpm, progress }) => {
+        // Broadcast to other player in the room
+        socket.to(roomCode).emit('opponentProgress', {
+            wpm,
+            progress
         });
-    }
+    });
 
-    if (typedValue.length === currentText.length) {
-        finishGame();
-    }
+    socket.on('gameFinished', ({ roomCode, wpm, accuracy, time }) => {
+        const room = rooms.get(roomCode);
+        if (!room) return;
+
+        // Store result
+        room.results[socket.id] = { wpm, accuracy, time };
+
+        // Notify opponent that this player finished
+        socket.to(roomCode).emit('opponentFinished', { wpm, time });
+
+        // Check if both players finished
+        if (Object.keys(room.results).length === 2) {
+            const playerIds = room.players;
+            const p1 = room.results[playerIds[0]];
+            const p2 = room.results[playerIds[1]];
+
+            // Simple winner logic: Higher WPM wins. Tie-break: Accuracy.
+            let winnerId = null;
+            if (p1.wpm > p2.wpm) winnerId = playerIds[0];
+            else if (p2.wpm > p1.wpm) winnerId = playerIds[1];
+            else {
+                // WPM tie, check accuracy
+                if (parseFloat(p1.accuracy) > parseFloat(p2.accuracy)) winnerId = playerIds[0];
+                else if (parseFloat(p2.accuracy) > parseFloat(p1.accuracy)) winnerId = playerIds[1];
+                else winnerId = 'draw';
+            }
+
+            io.to(roomCode).emit('gameOver', {
+                results: room.results,
+                winnerId: winnerId
+            });
+
+            // Cleanup room after delay or keep it for rematch? 
+            // For now, let's just leave it.
+        }
+    });
+
+    socket.on('disconnect', () => {
+        console.log('User disconnected:', socket.id);
+        // Cleanup rooms where this user was present
+        rooms.forEach((room, code) => {
+            if (room.players.includes(socket.id)) {
+                io.to(code).emit('playerDisconnected');
+                rooms.delete(code);
+            }
+        });
+    });
 });
 
-function finishGame() {
-    clearInterval(timerInterval);
-    isGameActive = false;
-    inputBox.disabled = true;
-
-    const charactersTyped = inputBox.value.length;
-    const timeSpent = totalTime - timeLeft;
-    const timeInMinutes = (timeSpent === 0 ? 1 : timeSpent) / 60;
-
-    const wpm = Math.round((charactersTyped / 5) / timeInMinutes);
-    const accuracy = accuracyDisplay.innerText;
-
-    saveScore({ wpm, accuracy, time: `${totalTime}s`, date: new Date().toLocaleTimeString() });
-    displayHistory();
-
-    if (isMultiplayer) {
-        socket.emit("gameFinished", {
-            roomCode: currentRoomCode,
-            wpm: wpm,
-            accuracy: accuracy,
-            time: timeSpent
-        });
-        statusMessage.innerText = `You finished! WPM: ${wpm}. Waiting for opponent...`;
-    }
-}
-
-/* =========================================
-   HISTORY & STORAGE
-   ========================================= */
-
-function saveScore(score) {
-    let history = JSON.parse(localStorage.getItem("typingHistory")) || [];
-    history.unshift(score);
-    if (history.length > 5) history.pop();
-    localStorage.setItem("typingHistory", JSON.stringify(history));
-}
-
-function displayHistory() {
-    let history = JSON.parse(localStorage.getItem("typingHistory")) || [];
-    resultsTableBody.innerHTML = "";
-
-    history.forEach(record => {
-        resultsTableBody.innerHTML += `
-            <tr>
-                <td>${record.wpm}</td>
-                <td>${record.accuracy}</td>
-                <td>${record.time}</td>
-            </tr>
-        `;
-    });
-}
-
-clearHistoryBtn.addEventListener("click", () => {
-    localStorage.removeItem("typingHistory");
-    displayHistory();
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
 });
